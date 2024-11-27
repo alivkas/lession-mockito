@@ -3,39 +3,37 @@ package shopping;
 import customer.Customer;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mockito;
-import org.mockito.junit.jupiter.MockitoExtension;
 import product.Product;
 import product.ProductDao;
-
-import java.util.HashMap;
-import java.util.LinkedHashMap;
-import java.util.Map;
 
 /**
  * Тестирование класса {@link ShoppingServiceImpl}
  */
-@ExtendWith(MockitoExtension.class)
 class ShoppingServiceImplTest {
 
     private final ProductDao productDaoMock = Mockito.mock(ProductDao.class);
-    private final Cart cartMock = Mockito.mock(Cart.class);
     private final ShoppingService shoppingService = new ShoppingServiceImpl(productDaoMock);
 
+    /**
+     * Тестировать получение одних и тех же объектов корзины из метода getCart
+     * (тест упадет, так как при каждом вызове метода создается новый объект)
+     */
     @Test
-    public void testGetCart() {
-        /*
-        Тестировать метод нет необходимости, так как он лишь возвращает
-        объект класса Cart
-         */
+    public void testGetEqualsCarts() {
+        Customer customer = new Customer(1L, "11-11-11");
+        Cart cart1 = shoppingService.getCart(customer);
+        Cart cart2 = shoppingService.getCart(customer);
+
+        Assertions.assertEquals(cart1, cart2);
     }
 
     @Test
     public void testGetAllProducts() {
         /*
         Тестировать метод нет необходимости, так как он только возвращает
-        все товары из базы данных
+        все товары из базы данных. Метод не хранит в себе логики, которую можно
+        протестировать. Вся работа происходит внутри другого класса ProductDao
          */
     }
 
@@ -60,43 +58,103 @@ class ShoppingServiceImplTest {
     }
 
     /**
-     * Тестировать сохранение товара, если корзина не пуста, в базу данных
+     * Тестировать весь процесс покупки из корзины, включая уменьшение количества
+     * товаров, их сохранение в базу данных и очищение корзины
+     * (тест упадет, так как после покупки корзина не очищается)
+     * @throws BuyException невозможность совершить покупку
      */
     @Test
-    public void testBuy() throws BuyException {
-        Product product1 = new Product("name1", 2);
-        Product product2 = new Product("name2", 3);
-        HashMap<Product, Integer> products = new LinkedHashMap<>();
-        products.put(product1, 2);
-        products.put(product2, 1);
+    public void testBuyProcess() throws BuyException {
+        Product product1 = new Product("name1", 3);
+        Product product2 = new Product("name2", 2);
+        Customer customer = new Customer(1L, "11-11-11");
 
-        Mockito.when(cartMock.getProducts())
-                .thenReturn(products);
+        Cart cart = new Cart(customer);
+        cart.add(product1, 2);
+        cart.add(product2, 1);
+        shoppingService.buy(cart);
 
-        Assertions.assertTrue(shoppingService.buy(cartMock));
+        Assertions.assertEquals(1, product1.getCount());
+        Assertions.assertEquals(1, product2.getCount());
 
-        Mockito.verify(productDaoMock, Mockito.times(1))
-                .save(Mockito.eq(product1));
-        Mockito.verify(productDaoMock, Mockito.times(1))
-                .save(Mockito.eq(product2));
+        Mockito.verify(productDaoMock)
+                .save(Mockito.argThat(product -> product.getName().equals("name1")
+                        && product.getCount() == product1.getCount()));
+        Mockito.verify(productDaoMock)
+                .save(Mockito.argThat(product -> product.getName().equals("name2")
+                        && product.getCount() == product1.getCount()));
+
+        Assertions.assertTrue(cart.getProducts().isEmpty());
     }
 
     /**
-     * Тестировать получение ошибки BuyException
+     * Тестировать корректное уменьшение количества товаров, после их покупки
+     * (тест упадет, так как метод validateCount класса Cart сравнивает
+     * разницу количества товаров и количества товаров в корзине между нулем и меньшими значениями.
+     * При таком условии нельзя будет купить ровно столько товаров, сколько имеется в наличии)
+     * @throws BuyException невозможность совершить покупку
+     */
+    @Test
+    public void testCorrectSubtractCountProduct() throws BuyException {
+        Product product = new Product("name", 3);
+        Customer customer = new Customer(1L, "11-11-11");
+        Cart cart = new Cart(customer);
+        cart.add(product, 3);
+        shoppingService.buy(cart);
+
+        Assertions.assertEquals(0, product.getCount());
+    }
+
+    /**
+     * Тестировать некорректное количество товаров в корзине и товарах
+     * (количество товаров в корзине больше, чем фактическое их количество)
+     */
+    @Test
+    public void testIncorrectSubtractCountProduct() {
+        Product product = new Product("name", 3);
+        Customer customer = new Customer(1L, "11-11-11");
+        Cart cart = new Cart(customer);
+
+        Exception exception = Assertions.assertThrows(IllegalArgumentException.class, () ->
+                cart.add(product, 4));
+
+        Assertions.assertEquals("Невозможно добавить товар 'name' в корзину," +
+                " т.к. нет необходимого количества товаров",
+                exception.getMessage());
+    }
+
+    /**
+     * Тестировать отрицательное значение количества товаров
+     */
+    @Test
+    public void testNegativeCountOfProduct() {
+        Product product = new Product("name", -3);
+        Customer customer = new Customer(1L, "11-11-11");
+        Cart cart = new Cart(customer);
+
+        Exception exception = Assertions.assertThrows(IllegalArgumentException.class, () ->
+                cart.add(product, 2));
+
+        Assertions.assertEquals("Отрицательное количество товаров",
+                exception.getMessage());
+    }
+
+    /**
+     * Тестировать невозможность совершить покупку
+     * (тест не успеет дойти до исключения BuyException, так как сначала будет проверяться
+     * добавление корректного количества товара в корзину)
      */
     @Test
     public void testBuyException() {
-        Product product1 = new Product("name1", 3);
-        Product product2 = new Product("name2", 1);
-        Map<Product, Integer> products = new HashMap<>();
-        products.put(product1, 2);
-        products.put(product2, 2);
-
-        Mockito.when(cartMock.getProducts())
-                .thenReturn(products);
+        Product product1 = new Product("name1", 1);
+        Product product2 = new Product("name2", 2);
+        Customer customer = new Customer(1L, "11-11-11");
+        Cart cart = new Cart(customer);
+        cart.add(product1, 2);
+        cart.add(product2, 1);
 
         Exception exception = Assertions.assertThrows(BuyException.class, () ->
-                shoppingService.buy(cartMock));
+                shoppingService.buy(cart));
 
         Assertions.assertEquals("В наличии нет необходимого количества товара 'name2'",
                 exception.getMessage());
