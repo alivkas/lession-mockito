@@ -115,7 +115,7 @@ class ShoppingServiceImplTest {
         Customer customer = new Customer(1L, "11-11-11");
         Cart cart = new Cart(customer);
 
-        Exception exception = Assertions.assertThrows(IllegalArgumentException.class, () ->
+        IllegalArgumentException exception = Assertions.assertThrows(IllegalArgumentException.class, () ->
                 cart.add(product, 4));
 
         Assertions.assertEquals("Невозможно добавить товар 'name' в корзину," +
@@ -133,7 +133,7 @@ class ShoppingServiceImplTest {
         Customer customer = new Customer(1L, "11-11-11");
         Cart cart = new Cart(customer);
 
-        Exception exception = Assertions.assertThrows(IllegalArgumentException.class, () ->
+        IllegalArgumentException exception = Assertions.assertThrows(IllegalArgumentException.class, () ->
                 cart.add(product, 2));
 
         Assertions.assertEquals("Отрицательное количество товаров",
@@ -141,30 +141,7 @@ class ShoppingServiceImplTest {
     }
 
     /**
-     * Тестировать невозможность совершить покупку
-     * (тест не успеет дойти до исключения BuyException, так как сначала будет проверяться
-     * добавление корректного количества товара в корзину)
-     */
-    @Test
-    public void testBuyException() {
-        Product product1 = new Product("name1", 1);
-        Product product2 = new Product("name2", 2);
-        Customer customer = new Customer(1L, "11-11-11");
-        Cart cart = new Cart(customer);
-        cart.add(product1, 2);
-        cart.add(product2, 1);
-
-        Exception exception = Assertions.assertThrows(BuyException.class, () ->
-                shoppingService.buy(cart));
-
-        Assertions.assertEquals("В наличии нет необходимого количества товара 'name2'",
-                exception.getMessage());
-    }
-
-    /**
      * Тестировать покупку товара, который закончился
-     * (тест также упадет, так как он не успеет дойти до исключения BuyException,
-     * из-за того, что сначала будет проверяться добавление корректного количества товара в корзину)
      */
     @Test
     public void testBuyOutOfStockProduct() throws BuyException {
@@ -172,11 +149,13 @@ class ShoppingServiceImplTest {
         Customer customer = new Customer(1L, "11-11-11");
         Cart cart = new Cart(customer);
 
-        cart.add(product, 3);
+        cart.add(product, 2);
         shoppingService.buy(cart);
 
-        cart.add(product, 2);
-        Exception exception = Assertions.assertThrows(BuyException.class, () ->
+        product.subtractCount(1);
+        Assertions.assertEquals(0, product.getCount());
+
+        BuyException exception = Assertions.assertThrows(BuyException.class, () ->
                 shoppingService.buy(cart));
 
         Assertions.assertEquals("В наличии нет необходимого количества товара 'name'",
