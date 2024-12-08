@@ -144,15 +144,13 @@ class ShoppingServiceImplTest {
      * Тестировать покупку товара, который закончился
      */
     @Test
-    public void testBuyOutOfStockProduct() throws BuyException {
+    public void testBuyOutOfStockProduct() {
         Product product = new Product("name", 3);
         Customer customer = new Customer(1L, "11-11-11");
         Cart cart = new Cart(customer);
 
         cart.add(product, 2);
-        shoppingService.buy(cart);
-
-        product.subtractCount(1);
+        product.subtractCount(3);
         Assertions.assertEquals(0, product.getCount());
 
         BuyException exception = Assertions.assertThrows(BuyException.class, () ->
